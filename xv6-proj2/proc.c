@@ -214,6 +214,14 @@ fork(void)
 
   pid = np->pid;
 
+  // R1: assign child's priority based on parent's priority.
+  //   parent >= 15 : child = parent / 2
+  //   parent <  15 : child = parent + 1
+  if(curproc->priority >= 15)
+    np->priority = curproc->priority / 2;
+  else
+    np->priority = curproc->priority + 1;
+
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
