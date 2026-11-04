@@ -7,9 +7,12 @@
 #include "proc.h"
 #include "spinlock.h"
 
+ // R2: add a priority-sorted ready queue to ptable
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc *rq[NPROC];  // ready queue
+  int rqlen;             // ready queue length
 } ptable;
 
 static struct proc *initproc;
@@ -25,6 +28,91 @@ pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 }
+
+// R2: Return 1 if process a should run before process b
+// Lower nice value -> higher priority
+// If priorities are equal -> the process with the larger pid goes first
+
+int
+higherprio(struct proc *a, struct proc *b)
+{
+  if(a->priority != b->priority)
+    return a->priority < b->priority;
+  return a->pid > b->pid;
+}
+
+// Insert p at its sorted position (insertion sort step).
+void
+enqueue(struct proc *p)
+{
+  int i, pos;
+
+  if(!holding(&ptable.lock))
+    panic("enqueue: no lock");
+  for(i = 0; i < ptable.rqlen; i++)
+    if(ptable.rq[i] == p)
+      panic("enqueue: already in queue");
+  if(ptable.rqlen >= NPROC)
+    panic("enqueue: queue full");
+
+  // Shift lower-priority entries one slot back until p's position is found.
+  pos = ptable.rqlen;
+  while(pos > 0 && higherprio(p, ptable.rq[pos-1])){
+    ptable.rq[pos] = ptable.rq[pos-1];
+    pos--;
+  }
+  ptable.rq[pos] = p;
+  ptable.rqlen++;
+}
+
+// Remove the entry at index idx and shift the rest forward.
+static void
+rqremove(int idx)
+{
+  int i;
+
+  for(i = idx + 1; i < ptable.rqlen; i++)
+    ptable.rq[i-1] = ptable.rq[i];
+  ptable.rqlen--;
+  ptable.rq[ptable.rqlen] = 0;
+}
+
+// Remove and return the highest-priority process. Return 0 if empty
+struct proc*
+dequeue(void)
+{
+  struct proc *p;
+
+  if(ptable.rqlen == 0)
+    return 0;
+  p = ptable.rq[0];
+  rqremove(0);
+  return p;
+}
+
+// Return the highest-priority process without removing it. 0 if empty
+struct proc*
+rqhead(void)
+{
+  if(ptable.rqlen == 0)
+    return 0;
+  return ptable.rq[0];
+}
+
+// Remove p from the queue if present (when p's priority changes)
+void
+rmqueue(struct proc *p)
+{
+  int i;
+
+  for(i = 0; i < ptable.rqlen; i++){
+    if(ptable.rq[i] == p){
+      rqremove(i);
+      return;
+    }
+  }
+}
+
 
 // Must be called with interrupts disabled
 int

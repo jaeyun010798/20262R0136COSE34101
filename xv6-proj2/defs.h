@@ -121,6 +121,12 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 int             setnice(int,int);
+// R2
+int             higherprio(struct proc*, struct proc*);
+void            enqueue(struct proc*);
+struct proc*    dequeue(void);
+struct proc*    rqhead(void);
+void            rmqueue(struct proc*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
