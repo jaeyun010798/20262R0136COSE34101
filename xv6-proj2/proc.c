@@ -240,6 +240,8 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  enqueue(p); // insert the 1st process
+
   release(&ptable.lock);
 }
 
@@ -313,6 +315,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  enqueue(np);  // insert the new process into the rq
 
   release(&ptable.lock);
 
@@ -430,10 +433,11 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+     while((p = dequeue()) != 0){
       if(p->state != RUNNABLE)
-        continue;
+        panic("scheduler: dequeued process not runnable");
 
+  
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -485,6 +489,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  enqueue(myproc());  // insert the yielding process into the rq
   sched();
   release(&ptable.lock);
 }
@@ -558,8 +563,11 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      enqueue(p);  // insert the woken process into the rq
+    }
+
 }
 
 // Wake up all processes sleeping on chan.
@@ -584,8 +592,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING){
         p->state = RUNNABLE;
+        enqueue(p);  // insert the woken process into the rq
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -641,7 +651,14 @@ setnice(int pid, int nice)
   acquire(&ptable.lock);
   for( p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid==pid){
+      if(p->state == RUNNABLE){
+      rmqueue(p);
       p->priority = nice;
+      enqueue(p);
+      } 
+      else {
+        p->priority = nice;
+      }
       release(&ptable.lock);
       return 0;
     }
