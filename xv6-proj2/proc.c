@@ -319,6 +319,8 @@ fork(void)
 
   release(&ptable.lock);
 
+  preempt_check();  // R3: check if the new process has higher priority than the current process
+
   return pid;
 }
 
@@ -494,6 +496,27 @@ yield(void)
   release(&ptable.lock);
 }
 
+// R3: yield only if the highest p RUNNABLE process
+void
+preempt_check(void)
+{
+  struct proc *cur = myproc();
+  struct proc *head;
+  int need_yield = 0;
+
+  if(cur==0 || cur->state != RUNNING)
+    return;
+
+  acquire(&ptable.lock);
+  head = rqhead();
+  if(head && higherprio(head, cur))
+    need_yield = 1;
+  release(&ptable.lock);  // must release b4 yield
+
+  if(need_yield)
+    yield();
+}
+
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
 void
@@ -660,6 +683,7 @@ setnice(int pid, int nice)
         p->priority = nice;
       }
       release(&ptable.lock);
+      preempt_check();  // R3: priority change may require preemption
       return 0;
     }
   }

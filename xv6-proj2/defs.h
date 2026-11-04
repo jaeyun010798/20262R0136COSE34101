@@ -127,6 +127,7 @@ void            enqueue(struct proc*);
 struct proc*    dequeue(void);
 struct proc*    rqhead(void);
 void            rmqueue(struct proc*);
+void            preempt_check(void);    // R3
 
 // swtch.S
 void            swtch(struct context**, struct context*);
